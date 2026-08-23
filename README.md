@@ -67,11 +67,32 @@ node bench.js 100         # 방 100개(200명) 부하·메모리 측정
 
 `PORT` 는 Railway 가 환경변수로 준다. `server.js` 가 이미 읽는다. 따로 설정할 것 없다.
 
-배포 후 같은 검사를 공개 URL 로 한 번 더:
+배포 후 같은 검사를 공개 URL 로 한 번 더 돌린다.
+
+⚠️ **`RELAY_URL=... node ...` 는 bash 문법이다.** Windows 기본 터미널에서는 안 된다 —
+cmd 는 그 전체를 "실행할 프로그램 이름"으로 읽고 `is not recognized` 를 낸다.
+
+```cmd
+:: cmd.exe
+set RELAY_URL=wss://xxx.up.railway.app
+node test_relay.js
+```
+
+```powershell
+# PowerShell
+$env:RELAY_URL = "wss://xxx.up.railway.app"
+node test_relay.js
+```
 
 ```bash
+# Git Bash / macOS / Linux
 RELAY_URL=wss://xxx.up.railway.app node test_relay.js
 ```
+
+지연도 같은 방식으로 잰다: `node ping.js`
+
+⚠️ 방 코드에 **`I` `L` `O` `U` 를 쓰면 안 된다.** `ROOM_ALPHABET` 에서 뺀 글자라
+서버가 `bad_code` 로 거부한다 (손으로 옮겨 적을 때 헷갈려서 뺐다).
 
 ## 이벤트 로그
 
