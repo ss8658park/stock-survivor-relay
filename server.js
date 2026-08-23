@@ -32,6 +32,14 @@ const CODE_RE = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{8}$/;
 // 이쪽은 TCP 가 조용히 끊긴 것을 찾는 용도고, `sync` 는 게임 상태 지문이다.
 const PING_MS = 30_000;
 
+// ── 인위적 지연·손실 (시험용) ────────────────────────────────
+// ⚠️ **기본값 0.** 배포본에서는 절대 켜지 않는다.
+//    로컬에서 `RELAY_LAG_MS=150 RELAY_LOSS=0.03 npm start` 로 띄우면
+//    "150ms 지연 + 3% 손실" 환경에서 게임이 버티는지 볼 수 있다.
+//    핑 0 으로만 시험한 게임은 실제 회선에서 무너진다.
+const LAG_MS = Number(process.env.RELAY_LAG_MS || 0);
+const LOSS   = Number(process.env.RELAY_LOSS || 0);
+
 /** code -> Map<player_id, ws> */
 const rooms = new Map();
 
@@ -57,7 +65,15 @@ function relay(ws, raw) {
   const room = rooms.get(ws.roomCode);
   if (!room) return;
   for (const [pid, peer] of room) {
-    if (pid !== ws.playerId) peer.send(raw);
+    if (pid === ws.playerId) continue;
+    // 시험용 손실. ⚠️ TCP 라 실제로는 이런 손실이 안 나지만, **애플리케이션이
+    //    이벤트를 잃었을 때** 게임이 어떻게 되는지는 봐야 한다.
+    if (LOSS > 0 && Math.random() < LOSS) {
+      log("dropped", { room: ws.roomCode, pid: ws.playerId });
+      continue;
+    }
+    if (LAG_MS > 0) setTimeout(() => { if (peer.readyState === peer.OPEN) peer.send(raw); }, LAG_MS);
+    else peer.send(raw);
   }
 }
 
@@ -125,6 +141,13 @@ wss.on("connection", (ws) => {
       //    코드는 (시드·차트·난이도) 를 그대로 담는데 시드가 `Time.get_ticks_usec()` 라
       //    가동 시간이 비슷하면 값도 가깝다 — 켜자마자 방을 만드는 것이 보통이라
       //    분포가 한쪽에 몰린다. 겹치면 **남의 판에 들어간다.**
+      // ⚠️ **버전이 다르면 붙이지 않는다.** 이 게임은 양쪽이 각자 시뮬레이션을
+      //    돌리므로(결정론적 락스텝), 클라이언트가 한 줄만 달라도 판이 갈린다.
+      //    그런데 그 증상은 **디싱크**로만 나타나서, 막지 않으면 원인을 영영 못 찾는다.
+      //    서버는 값의 의미를 모른다 — 같은지만 본다.
+      const proto = String(msg.protocol || "");
+      if (!proto) return fail(ws, "no_protocol");
+
       if (kind === "room_create" && exists) {
         return fail(ws, "code_taken", code);   // 클라이언트가 다시 뽑는다
       }
@@ -133,7 +156,10 @@ wss.on("connection", (ws) => {
       }
 
       const room = exists ? rooms.get(code) : new Map();
-      if (!exists) rooms.set(code, room);
+      if (!exists) { rooms.set(code, room); room.protocol = proto; }
+      if (room.protocol !== proto) {
+        return fail(ws, "version_mismatch", room.protocol + " != " + proto);
+      }
 
       // 같은 사람이 두 번 들어오는 것과 정원 초과를 막는다 (§3 5-B 7번).
       if (room.has(pid)) return fail(ws, "duplicate_player", pid);
