@@ -1,0 +1,16 @@
+{
+  "name": "stock-survivor-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stock Survivor 1대1 대전 릴레이 — 게임 로직을 모르는 순수 중계",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
